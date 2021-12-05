@@ -2,10 +2,12 @@ import pm4py
 import os
 import sys
 from PyQt5 import QtWidgets
-from PyQt5.QtWidgets import QApplication, QWidget, QFileDialog, QBoxLayout, QVBoxLayout, QLabel
+from PyQt5.QtWidgets import QApplication, QWidget, QFileDialog, QBoxLayout, QVBoxLayout, QLabel, QPlainTextEdit, \
+    QGridLayout
 import pandas as pd
 from pm4py.objects.conversion.log import converter as log_converter
 from pm4py.algo.discovery.inductive import algorithm as inductive_miner
+from pm4py.objects.log.util import func as functools
 from pm4py.visualization.process_tree import visualizer as pt_visualizer
 from pm4py.objects.log.importer.xes import importer as xes_importer
 from pm4py.algo.discovery.inductive import algorithm as inductive_miner
@@ -26,13 +28,18 @@ class Window:
 
         w = QWidget()
         main_box = QVBoxLayout()
+        self.grid = QGridLayout(
 
+        )
         self.btn_open_file = QPushButton("Open file")
         self.btn_open_file.setGeometry(50, 50, 70, 20)
         self.btn_open_file.clicked.connect(self.btn_open_csv_file)
 
         self.l1 = QLabel()
         self.l1.setText(self.selected_file)
+
+        self.terminal = QPlainTextEdit()
+        self.terminal.setReadOnly(True)
 
         self.btn_draw_bpmn = QPushButton("Draw bpmn model")
         self.btn_draw_bpmn.setGeometry(50, 50, 70, 20)
@@ -55,7 +62,8 @@ class Window:
 
         main_box.addLayout(hbox1)
         main_box.addWidget(self.l1)
-        main_box.addStretch()
+        main_box.addWidget(self.terminal)
+
 
         hbox = QHBoxLayout()
         main_box.addLayout(hbox)
@@ -73,7 +81,7 @@ class Window:
 
 
     def show_process_bpmn(self):
-        print(self.event_log)
+        print(str(self.event_log))
         process_tree = pm4py.discover_process_tree_inductive(self.event_log)
         bpmn_model = pm4py.convert_to_bpmn(process_tree)
         pm4py.view_bpmn(bpmn_model)
@@ -93,7 +101,7 @@ class Window:
         pn_visualizer.view(gviz)
 
 
-    def get_csv_event_log(self,path):
+    def get_csv_event_log(self, path):
         log_csv = pd.read_csv(path, sep=';')
         log_csv = pm4py.format_dataframe(log_csv, case_id='case_id', activity_key='activity', timestamp_key='timestamp',
                                          timest_format='%Y-%m-%d- %H:%M:%S%z')
@@ -101,8 +109,26 @@ class Window:
         self.event_log = log_converter.apply(log_csv, parameters=parameters, variant=log_converter.Variants.TO_EVENT_LOG)
         log_csv = log_csv.sort_values('time:timestamp')
         self.event_log = log_converter.apply(log_csv)
+        self.terminal.appendPlainText('model loaded')
+        self.filter_by_attr()
 
+    def get_xes_event_log(self, path):
+        variant = xes_importer.Variants.ITERPARSE
+        parameters = {variant.value.Parameters.TIMESTAMP_SORT: True}
+        self.event_log = xes_importer.apply(path, variant=variant, parameters=parameters)
+        self.terminal.appendPlainText(str(self.event_log))
 
+    def filter_log(self):
+        event_log_mike = pm4py.filter_log(lambda e: len(e) > 6, self.event_log)
+        process_tree = pm4py.discover_process_tree_inductive(event_log_mike)
+        bpmn_model = pm4py.convert_to_bpmn(process_tree)
+        pm4py.view_bpmn(bpmn_model)
+
+    def filter_by_attr(self):
+        event_log = pm4py.filter_event_attribute_values(self.event_log,'resource','Mike', level='event')
+        process_tree = pm4py.discover_process_tree_inductive(event_log)
+        bpmn_model = pm4py.convert_to_bpmn(process_tree)
+        pm4py.view_bpmn(bpmn_model)
 
     def btn_open_csv_file(self):
         file_name = QFileDialog.getOpenFileName()
