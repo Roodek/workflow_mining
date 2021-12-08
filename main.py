@@ -2,17 +2,21 @@ import pm4py
 import os
 import sys
 from PyQt5 import QtWidgets
+from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import QApplication, QWidget, QFileDialog, QBoxLayout, QVBoxLayout, QLabel, QPlainTextEdit, \
     QGridLayout, QLineEdit, QCheckBox, QRadioButton
 import pandas as pd
 from pm4py.objects.conversion.log import converter as log_converter
-from pm4py.algo.discovery.alpha import algorithm as alpha_miner
 from pm4py.objects.log.util import func as functools
 from pm4py.visualization.process_tree import visualizer as pt_visualizer
 from pm4py.objects.log.importer.xes import importer as xes_importer
 from pm4py.algo.discovery.inductive import algorithm as inductive_miner
+from pm4py.algo.discovery.alpha import algorithm as alpha_miner
+from pm4py.algo.discovery.heuristics import algorithm as heuristics_miner
 from pm4py.objects.conversion.process_tree import converter as pt_converter
 from pm4py.visualization.petri_net import visualizer as pn_visualizer
+from pm4py.visualization.heuristics_net import visualizer as hn_visualizer
+
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QHBoxLayout
 from enum import Enum
 
@@ -63,6 +67,14 @@ class Window(QWidget):
         hbox1.addWidget(self.btn_open_file)
         hbox1.addStretch()
 
+        self.dependency_threshold_box = QHBoxLayout()
+        self.dependency_threshold_box.addWidget(QLabel("heuristic threshold value(used in heuristic miner, max value 1.00)"))
+        self.dependency_threshold_input = QLineEdit()
+        self.dependency_threshold_input.setInputMask('9.99')
+        self.dependency_threshold_input.setText(str(0.5))
+        self.dependency_threshold_box.addWidget(self.dependency_threshold_input)
+        self.dependency_threshold_input.setEnabled(False)
+
         self.radiobtn_inductive = QRadioButton("inductive miner algorithm")
         self.radiobtn_alpha = QRadioButton("alpha miner algorithm")
         self.radiobtn_heuristic = QRadioButton("heuristic miner algorithm")
@@ -81,9 +93,12 @@ class Window(QWidget):
         hbox2.addWidget(self.radiobtn_heuristic)
         hbox2.addWidget(self.radiobtn_correlation)
 
+
+
         main_box.addLayout(hbox1)
         main_box.addLayout(hbox2)
-        main_box.addWidget(self.l1)
+        main_box.addLayout(self.dependency_threshold_box)
+        hbox1.addWidget(self.l1)
         main_box.addWidget(self.terminal)
 
         main_box.addLayout(self.grid)
@@ -143,7 +158,7 @@ class Window(QWidget):
         elif self.selected_miner == MINER_TYPE.ALPHA_MINER:
             self.visualize_alpha_pn()
         elif self.selected_miner == MINER_TYPE.HEURISTIC_MINER:
-            pass
+            self.visualize_heuristic_net()
         elif self.selected_miner == MINER_TYPE.CORRELATION_MINER:
             pass
 
@@ -151,6 +166,17 @@ class Window(QWidget):
         tree = inductive_miner.apply_tree(self.event_log)
         net, initial_marking, final_marking = pt_converter.apply(tree, variant=pt_converter.Variants.TO_PETRI_NET)
         gviz = pn_visualizer.apply(net, initial_marking, final_marking)
+        pn_visualizer.view(gviz)
+
+    def visualize_heuristic_net(self):
+        # heu_net = heuristics_miner.apply_heu(self.event_log, parameters={
+        #     heuristics_miner.Variants.CLASSIC.value.Parameters.DEPENDENCY_THRESH: 0.99})
+        # gviz = hn_visualizer.apply(heu_net)
+        # hn_visualizer.view(gviz)
+        net, im, fm = heuristics_miner.apply(self.event_log, parameters={
+            heuristics_miner.Variants.CLASSIC.value.Parameters.DEPENDENCY_THRESH: 0.5})
+
+        gviz = pn_visualizer.apply(net, im, fm)
         pn_visualizer.view(gviz)
 
     def visualize_alpha_pn(self):
@@ -210,10 +236,16 @@ class Window(QWidget):
         pm4py.view_bpmn(bpmn_model)
 
     def filter_by_attr(self, attr, val):
-        event_log = pm4py.filter_event_attribute_values(self.event_log, attr, val, level='event')
-        process_tree = pm4py.discover_process_tree_inductive(event_log)
+        filtered_event_log = pm4py.filter_event_attribute_values(self.event_log, attr, val, level='event')
+        process_tree = pm4py.discover_process_tree_inductive(filtered_event_log)
         bpmn_model = pm4py.convert_to_bpmn(process_tree)
         pm4py.view_bpmn(bpmn_model)
+
+    def convert_petri_net_to_bpmn(self,petri_net):
+        return pm4py.objects.conversion.wf_net.variants.to_bpmn.apply(petri_net)
+
+    def convert_petri_net_to_process_tree(self,petri_net):
+        return pm4py.objects.conversion.wf_net.variants.to_process_tree.apply(petri_net)
 
     def btn_open_csv_file(self):
         file_name = QFileDialog.getOpenFileName()
@@ -223,6 +255,11 @@ class Window(QWidget):
         self.update_buttons()
 
     def update_buttons(self):
+        if self.selected_miner == MINER_TYPE.HEURISTIC_MINER:
+            self.dependency_threshold_input.setEnabled(True)
+        else:
+            self.dependency_threshold_input.setEnabled(False)
+
         if len(self.selected_file) > 0:
             if self.selected_miner == MINER_TYPE.INDUCTIVE_MINER:
                 self.btn_draw_bpmn.setEnabled(True)
@@ -233,13 +270,16 @@ class Window(QWidget):
                 self.btn_draw_process_tree.setEnabled(False)
                 self.btn_draw_petri_net.setEnabled(True)
             elif self.selected_miner == MINER_TYPE.HEURISTIC_MINER:
-                pass
+                self.btn_draw_bpmn.setEnabled(False)
+                self.btn_draw_process_tree.setEnabled(False)
+                self.btn_draw_petri_net.setEnabled(True)
             elif self.selected_miner == MINER_TYPE.CORRELATION_MINER:
                 pass
         else:
             self.btn_draw_bpmn.setEnabled(False)
             self.btn_draw_process_tree.setEnabled(False)
             self.btn_draw_petri_net.setEnabled(False)
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
