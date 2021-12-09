@@ -102,7 +102,7 @@ class Window(QWidget):
         hbox2.addWidget(self.radiobtn_inductive)
         hbox2.addWidget(self.radiobtn_alpha)
         hbox2.addWidget(self.radiobtn_heuristic)
-        hbox2.addWidget(self.radiobtn_correlation)
+        #hbox2.addWidget(self.radiobtn_correlation)
 
         main_box.addLayout(hbox1)
         main_box.addLayout(hbox2)
@@ -120,7 +120,7 @@ class Window(QWidget):
         hbox.addWidget(self.btn_draw_petri_net)
 
         self.setLayout(main_box)
-        self.resize(250, 180)
+        self.resize(350, 250)
         self.move(500, 500)
         self.setWindowTitle('Workflow-mining')
 
