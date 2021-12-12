@@ -28,6 +28,7 @@ class MINER_TYPE(Enum):
     ALPHA_MINER = 1
     HEURISTIC_MINER = 2
     CORRELATION_MINER=3
+##TODO add csv column names dialog
 
 class Window(QWidget):
 
