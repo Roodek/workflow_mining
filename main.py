@@ -4,12 +4,13 @@ import sys
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import QApplication, QWidget, QFileDialog, QBoxLayout, QVBoxLayout, QLabel, QPlainTextEdit, \
-    QGridLayout, QLineEdit, QCheckBox, QRadioButton, QMessageBox
+    QGridLayout, QLineEdit, QCheckBox, QRadioButton, QMessageBox, QDialog, QDialogButtonBox
 import pandas as pd
 from PyQt5.QtCore import *
 from pm4py.objects.conversion.log import converter as log_converter
 from pm4py.objects.conversion.wf_net.variants.to_process_tree import Parameters
-from pm4py.objects.log.util import func as functools
+from pm4py.objects.conversion.wf_net import converter as wf_net_converter
+
 from pm4py.visualization.process_tree import visualizer as pt_visualizer
 from pm4py.objects.log.importer.xes import importer as xes_importer
 from pm4py.algo.discovery.inductive import algorithm as inductive_miner
@@ -248,16 +249,18 @@ class Window(QWidget):
         pn_visualizer.view(gviz)
 
     def get_csv_event_log(self, path):
-        log_csv = pd.read_csv(path, sep=';')
-        log_csv = pm4py.format_dataframe(log_csv, case_id='case_id', activity_key='activity', timestamp_key='timestamp',
-                                         timest_format='%Y-%m-%d- %H:%M:%S%z')
-        parameters = {log_converter.Variants.TO_EVENT_LOG.value.Parameters.CASE_ID_KEY: 'case:concept:name'}
-        self.event_log = log_converter.apply(log_csv, parameters=parameters, variant=log_converter.Variants.TO_EVENT_LOG)
-        log_csv = log_csv.sort_values('time:timestamp')
-        self.event_log = log_converter.apply(log_csv)
-        self.original_dataframe=log_csv
-        self.terminal.appendPlainText('model loaded')
-        self.add_column_filter_fields(log_csv)
+        open_dialog = Csv_Input_Dialog()
+        if open_dialog.exec_():
+            log_csv = pd.read_csv(path, sep=';')
+            log_csv = pm4py.format_dataframe(log_csv, case_id='case_id', activity_key='activity', timestamp_key='timestamp',
+                                             timest_format='%Y-%m-%d- %H:%M:%S%z')
+            parameters = {log_converter.Variants.TO_EVENT_LOG.value.Parameters.CASE_ID_KEY: 'case:concept:name'}
+            self.event_log = log_converter.apply(log_csv, parameters=parameters, variant=log_converter.Variants.TO_EVENT_LOG)
+            log_csv = log_csv.sort_values('time:timestamp')
+            self.event_log = log_converter.apply(log_csv)
+            self.original_dataframe=log_csv
+            self.terminal.appendPlainText('model loaded')
+            self.add_column_filter_fields(log_csv)
 
     def df_events_to_event_log(self,df):
         return log_converter.apply(df)
@@ -318,6 +321,7 @@ class Window(QWidget):
     def convert_petri_net_to_process_tree(self,petri_net):
         if pm4py.objects.petri_net.utils.check_soundness.check_wfnet(petri_net[0]):
             try:
+                #tree = wf_net_converter.apply(petri_net[0],petri_net[1],petri_net[2])
                 tree = pm4py.objects.conversion.wf_net.variants.to_process_tree.apply(petri_net[0],petri_net[1],petri_net[2])#parameters={Parameters.DEBUG:True}
                 return tree
             except:
@@ -370,6 +374,41 @@ class Window(QWidget):
         msg.setText(text)
         msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
         retval = msg.exec_()
+
+
+class Csv_Input_Dialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Enter CSV file data")
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+
+        vbox = QVBoxLayout()
+        self.case_id_input = QLineEdit()
+        self.activity_input = QLineEdit()
+        self.timestamp_input = QLineEdit()
+        self.separator_input = QLineEdit()
+        self.grid = QGridLayout()
+        self.grid.addWidget(QLabel("Enter case id column header name:"), 0, 0)
+        self.grid.addWidget(QLabel("Enter activity column header name:"), 1, 0)
+        self.grid.addWidget(QLabel("Enter timestamp column header name:"), 2, 0)
+        self.grid.addWidget(QLabel("Enter csv separator:"), 3, 0)
+        self.grid.addWidget(self.case_id_input, 0, 1)
+        self.grid.addWidget(self.activity_input, 1, 1)
+        self.grid.addWidget(self.timestamp_input, 2, 1)
+        self.grid.addWidget(self.separator_input, 3, 1)
+        self.case_id_input.setText('case_id')
+        self.activity_input.setText('activity')
+        self.timestamp_input.setText('timestamp')
+        self.separator_input.setText(';')
+        vbox.addLayout(self.grid)
+        vbox.addStretch()
+        vbox.addWidget(self.button_box)
+        self.setLayout(vbox)
+
+    def get_inputs(self):
+        return self.separator_input.text(), self.case_id_input.text(), self.activity_input.text(), self.timestamp_input.text()
 
 
 if __name__ == '__main__':
